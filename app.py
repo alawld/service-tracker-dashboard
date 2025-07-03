@@ -1075,7 +1075,7 @@ def add_entry():
         container_name = request.form.get('application')
         internalurl = request.form.get('internal_url')
         externalurl = request.form.get('external_url')
-        group_mode = request.form.get('group_mode')  # 'existing' or 'new'
+        group_mode = request.form.get('group_mode')  # 'existing' or '0new'
         group_name = None
 
         if group_mode == 'existing':
@@ -1765,14 +1765,113 @@ def create_default_admin():
 @login_required
 def dashboard_ld():
     from ldclient import Context
+    
     # Build a LaunchDarkly context for the current user
     context = Context.builder(str(current_user.id)).name(current_user.username).build()
+    
     # Evaluate the flag for this user
     show_new_ui = ld_client.variation("new-dashboard-ui", context, False)
-    if show_new_ui:
-        return render_template("dashboard_new.html")
+    
+    # Get the same data as the main dashboard route
+    sort = request.args.get('sort', 'group_name')
+    direction = request.args.get('dir', 'asc')
+    group_by = request.args.get('group_by', 'group_name')
+    sort_in_group = request.args.get('sort_in_group', 'priority')
+    msg = request.args.get('msg')
+
+    if sort == 'group_name':
+        query = ServiceEntry.query.options(joinedload(ServiceEntry.group)) \
+            .join(Group, isouter=True) \
+            .order_by(asc(Group.group_name) if direction == 'asc' else desc(Group.group_name))
     else:
-        return render_template("dashboard.html")
+        sort_attr = getattr(ServiceEntry, sort, None)
+        if not sort_attr:
+            sort_attr = ServiceEntry.container_name
+        query = ServiceEntry.query.order_by(sort_attr.asc() if direction == 'asc' else sort_attr.desc())
+
+    entries = query.all()
+
+    # Group lookup for ID → name
+    groups = Group.query.all()
+    group_lookup = {g.id: g.group_name for g in groups}
+
+    # Widget values
+    widget_value_rows = WidgetValue.query.all()
+    widget_values = {}
+    for wv in widget_value_rows:
+        if wv.widget_id not in widget_values:
+            widget_values[wv.widget_id] = {}
+        widget_values[wv.widget_id][wv.widget_value_key] = wv.widget_value
+
+    # Group entries by group_id
+    grouped_entries = defaultdict(list)
+    for entry in entries:
+        if group_by == 'group_name':
+            raw_key = entry.group_id
+        elif group_by == 'is_static':
+            raw_key = "Static" if entry.is_static else "Dynamic"
+        else:
+            raw_key = getattr(entry, group_by)
+            raw_key = str(raw_key) if raw_key is not None else "None"
+
+        grouped_entries[raw_key].append(entry)
+
+    # Sort entries within each group
+    for key in grouped_entries:
+        if sort_in_group == 'alphabetical':
+            grouped_entries[key].sort(key=lambda e: e.container_name.lower())
+        else:
+            grouped_entries[key].sort(key=lambda e: (
+                e.sort_priority if e.sort_priority is not None else 9999,
+                e.container_name.lower()
+            ))
+
+    # Sort group headers
+    if group_by == "is_static":
+        sort_order = {"Static": 0, "Dynamic": 1}
+        grouped_entries = dict(sorted(grouped_entries.items(), key=lambda item: sort_order.get(item[0], 99)))
+    elif group_by == "group_name":
+        group_meta = {
+            g.id: (
+                g.group_sort_priority if g.group_sort_priority is not None else 9999,
+                g.group_name.lower()
+            )
+            for g in groups
+        }
+
+        def group_sort_key(item):
+            group_id = item[0]
+            if group_id is None:
+                return (float('inf'), 'zzz')
+            return group_meta.get(group_id, (9999, 'zzz'))
+
+        grouped_entries = dict(sorted(grouped_entries.items(), key=group_sort_key))
+    else:
+        grouped_entries = dict(sorted(grouped_entries.items()))
+
+    widget_fields = {
+        widget.id: widget.widget_fields for widget in Widget.query.all()
+    }
+
+    # Choose template based on LaunchDarkly flag
+    template_name = "dashboard_new.html" if show_new_ui else "dashboard.html"
+    
+    return render_template(
+        template_name,
+        entries=entries,
+        grouped_entries=grouped_entries,
+        sort=sort,
+        direction=direction,
+        group_by=group_by,
+        msg=msg,
+        STD_DOZZLE_URL=settings.get("std_dozzle_url"),
+        display_tools=settings.get("display_tools", False),
+        widget_values=widget_values,
+        widget_fields=widget_fields,
+        sort_in_group=sort_in_group,
+        active_tab='dashboard',
+        group_lookup=group_lookup,
+    )
 
 if __name__ == '__main__':
     create_default_admin()
