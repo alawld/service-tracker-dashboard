@@ -260,8 +260,118 @@
               {% endif %}
             </td>
           </tr>
+          {% endfor %}
+        </tbody>
         {% endfor %}
-      </tbody>
-    </table>
+      </table>
+      
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let secondsSinceRefresh = 0;
+  let refreshInterval = 60;
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const filterInput = document.getElementById('filterInput');
+    const refreshLabel = document.getElementById('refreshTimer');
+    const refreshDropdown = document.getElementById('refreshInterval');
+    const groupBySelect = document.getElementById('groupBySelect');
+    const sortInGroupSelect = document.getElementById('sortInGroupSelect');
+
+    if (groupBySelect) {
+      groupBySelect.addEventListener('change', function () {
+        const params = new URLSearchParams(window.location.search);
+        params.set('group_by', this.value);
+        window.location.search = params.toString();
+      });
+    }
+
+    const rows = document.querySelectorAll('table tbody tr[data-entry]');
+    if (filterInput) {
+      filterInput.addEventListener('input', function () {
+        const filter = this.value.toLowerCase();
+        rows.forEach(row => {
+          const group = row.dataset.group.toLowerCase();
+          const name = row.dataset.container.toLowerCase();
+          const stack = row.dataset.stack.toLowerCase();
+          row.style.display = (group.includes(filter) || name.includes(filter) || stack.includes(filter)) ? '' : 'none';
+        });
+      });
+    }
+
+    const savedInterval = localStorage.getItem('refreshInterval');
+    if (savedInterval !== null) {
+      refreshInterval = parseInt(savedInterval);
+      if (refreshDropdown) refreshDropdown.value = savedInterval;
+    }
+
+    if (refreshDropdown) {
+      refreshDropdown.addEventListener('change', function () {
+        refreshInterval = parseInt(this.value);
+        localStorage.setItem('refreshInterval', this.value);
+      });
+    }
+
+    setInterval(() => {
+      secondsSinceRefresh++;
+      if (refreshLabel) {
+        const m = Math.floor(secondsSinceRefresh / 60);
+        const s = secondsSinceRefresh % 60;
+        refreshLabel.textContent = `Refreshed ${m > 0 ? m + 'm ' : ''}${s}s ago`;
+      }
+      if (refreshInterval > 0 && secondsSinceRefresh >= refreshInterval) {
+        window.location.reload();
+      }
+    }, 1000);
+
+    // Restore group collapse
+    const allGroups = document.querySelectorAll('[id^="toggle-icon-"]');
+    allGroups.forEach(iconEl => {
+      const groupId = iconEl.id.replace('toggle-icon-', '');
+      const isCollapsed = localStorage.getItem(`group-collapsed-${groupId}`) === 'true';
+      const entries = document.querySelectorAll(`tr.group-entry[data-group-id='${groupId}']`);
+      entries.forEach(row => row.style.display = isCollapsed ? 'none' : '');
+      iconEl.textContent = isCollapsed ? '▶' : '▼';
+    });
+
+    if (sortInGroupSelect) {
+      const savedSort = localStorage.getItem('sortInGroup');
+      if (!savedSort) {
+        localStorage.setItem('sortInGroup', sortInGroupSelect.value);
+      } else if (sortInGroupSelect.value !== savedSort) {
+        sortInGroupSelect.value = savedSort;
+        const params = new URLSearchParams(window.location.search);
+        params.set('sort_in_group', savedSort);
+        window.location.search = params.toString();
+      }
+
+      sortInGroupSelect.addEventListener('change', function () {
+        localStorage.setItem('sortInGroup', this.value);
+        const params = new URLSearchParams(window.location.search);
+        params.set('sort_in_group', this.value);
+        window.location.search = params.toString();
+      });
+    }
+  });
+
+  function toggleGroup(groupId) {
+    const entries = document.querySelectorAll(`tr.group-entry[data-group-id='${groupId}']`);
+    const icon = document.getElementById(`toggle-icon-${groupId}`);
+    let isCollapsed = localStorage.getItem(`group-collapsed-${groupId}`) === 'true';
+    const newState = !isCollapsed;
+    entries.forEach(row => row.style.display = newState ? 'none' : '');
+    if (icon) icon.textContent = newState ? '▶' : '▼';
+    localStorage.setItem(`group-collapsed-${groupId}`, newState);
+  }
+
+  function copyToClipboard(text, el) {
+    navigator.clipboard.writeText(text).then(() => {
+      const original = el.innerHTML;
+      el.innerHTML = "<em>Copied!</em>";
+      setTimeout(() => el.innerHTML = original, 1000);
+    });
+  }
+</script>
 {% endblock %} 
