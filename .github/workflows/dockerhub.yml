@@ -33,8 +33,10 @@ jobs:
           context: .
           push: true
           tags: |
-            crzykidd/service-tracker-dashboard:${{ env.VERSION }}
-            crzykidd/service-tracker-dashboard:latest
+#            crzykidd/service-tracker-dashboard:${{ env.VERSION }}
+#            crzykidd/service-tracker-dashboard:latest
+            alawld/service-tracker-dashboard:${{ env.VERSION }}
+            alawld/service-tracker-dashboard:latest
           build-args: |
             APP_VERSION=${{ env.VERSION }}
             GIT_COMMIT=${{ github.sha }}
