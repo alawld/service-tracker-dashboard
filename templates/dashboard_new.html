@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% set active_tab = 'dashboard' %}
+
+{% block head %}
+<style>
+  .logo-icon {
+    height: 40px;
+    max-width: 40px;
+    filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.5));
+    transition: transform 0.2s ease-in-out;
+  }
+  .logo-icon:hover {
+    transform: scale(1.1);
+  }
+  .icon-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background-color: #3d3d3d;
+    border-radius: 4px;
+    font-size: 20px;
+    color: #9e9e9e;
+  }
+</style>
+{% endblock %}
+
+{% block filter_bar %}
+  {% include "partials/filter_bar.html" %}
+{% endblock %}
+
+{% block content %}
+<div class="bg-blue-700 text-white px-4 py-2 rounded mb-4 text-center text-xl font-bold">dashboard_new</div>
+{% if msg == 'deleted' %}
+  <div class="bg-red-700 text-white px-4 py-2 rounded mb-4">Entry deleted successfully.</div>
+{% elif msg == 'added' %}
+  <div class="bg-green-700 text-white px-4 py-2 rounded mb-4">Entry added successfully.</div>
+{% endif %}
+
+<div class="overflow-x-auto">
+      <table class="min-w-full table-auto text-sm text-left border-collapse">
+        <thead class="bg-gray-700 text-gray-200">
+          <tr>
+            <th class="px-3 py-2">Logo</th>
+            <th class="px-3 py-2">Group</th>
+            <th class="px-3 py-2">Container</th>
+            <th class="px-3 py-2">Stack</th>
+            <th class="px-3 py-2">Host</th>
+            <th class="px-3 py-2">Widget</th>
+            <th class="px-3 py-2">URLs</th>
+            <th class="px-3 py-2">Status</th>
+            {% if display_tools %}
+              <th class="px-3 py-2">Tools</th>
+            {% endif %}
+            <th class="px-3 py-2">Actions</th>
+          </tr>
+        </thead>
+
+          {% for group_data in grouped_entries.items() %}
+          {% set group = group_data[0] %}
+          {% set group_entries = group_data[1] %}
+          {% set group_index = loop.index0 %}
+          <tbody>
+            <tr class="bg-gray-800 font-semibold cursor-pointer" onclick="toggleGroup('{{ group_index }}')">
+              <td colspan="11" class="px-4 py-2">
+                <span id="toggle-icon-{{ group_index }}">▼</span>
+                  {% if group_by == 'group_name' %}
+                    {{ group_lookup[group] if group in group_lookup else 'Unknown Group' }}
+                  {% else %}
+                    {{ group }}
+                  {% endif %}
+                  <span class="text-sm text-gray-400 ml-2">({{ group_entries|length }})</span>
+
+              </td>
+            </tr>
+          </tbody>
+          <tbody>
+            {% for entry in group_entries %}
+            <tr class="border-b border-gray-700 group-entry"
+                data-group-id="{{ group_index }}"
+                data-entry data-group="{{ group_lookup[entry.group_id] if entry.group_id in group_lookup else 'Unknown' }}"
+                data-container="{{ entry.container_name }}"
+                data-stack="{{ entry.stack_name }}">
+
+
+            <td class="px-3 py-2">
+              <div class="logo-icon">
+                {% if entry.image_icon %}
+                  {% set target_url = entry.internalurl or entry.externalurl %}
+                  {% if target_url %}
+                    <a href="{{ target_url }}" target="_blank">
+                      <img src="{{ url_for('serve_image', filename=entry.image_icon) }}"
+                          class="logo-icon"
+                          alt="Logo"
+                          onerror="this.style.display='none'; this.parentElement.innerHTML = '&lt;span class=\'icon-placeholder\'&gt;🚫&lt;/span&gt;';">
+                    </a>
+                  {% else %}
+                    <img src="{{ url_for('serve_image', filename=entry.image_icon) }}"
+                        class="logo-icon"
+                        alt="Logo"
+                        onerror="this.style.display='none'; this.parentElement.innerHTML = '&lt;span class=\'icon-placeholder\'&gt;🚫&lt;/span&gt;';">
+                  {% endif %}
+                {% else %}
+                  <span class="icon-placeholder">📦</span>
+                {% endif %}
+              </div>
+            </td>
+
+            <td class="px-3 py-2">{{ group_lookup[entry.group_id] if entry.group_id in group_lookup else 'Unknown' }}</td>
+            
+            <td class="px-3 py-2">
+              {% set target_url = entry.internalurl or entry.externalurl %}
+              {% if target_url %}
+                <div>
+                  <a href="{{ target_url }}" target="_blank" class="text-blue-400 hover:underline">{{ entry.container_name }}</a>
+                </div>
+              {% else %}
+                <div>{{ entry.container_name }}</div>
+              {% endif %}
+
+              {% if entry.container_id %}
+              <div class="text-xs text-gray-400 cursor-pointer" onclick="copyToClipboard('{{ entry.container_id }}', this)" title="Click to copy full ID">
+                <code>{{ entry.container_id[:12] }}</code>
+              </div>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2">{{ entry.stack_name or '' }}</td>
+            <td class="px-3 py-2">{{ entry.host }}</td>
+            <td class="px-3 py-2 align-top">
+              {% if entry.widget_id %}
+                {% set widget_data = widget_values.get(entry.widget_id) %}
+                {% if widget_data %}
+                  <div class="flex flex-wrap gap-1">
+                    {% set allowed_fields = widget_fields.get(entry.widget_id, []) %}
+                    {% for field, value in widget_data.items() if field in allowed_fields %}
+
+                      <div class="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-center min-w-[72px]">
+                        <div class="text-[0.6rem] text-gray-400 uppercase tracking-wide leading-tight whitespace-nowrap">
+                          {{ field.replace('_', ' ') | title }}
+                        </div>
+                        <div class="text-sm font-medium leading-snug" title="{{ value }}">
+                          {% if value.lower().startswith('error:') %}
+                            <span class="text-red-500">Error</span>
+                          {% else %}
+                            <span class="text-white">{{ value }}</span>
+                          {% endif %}
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <div class="text-gray-500 italic text-xs">No widget data</div>
+                {% endif %}
+              {% else %}
+                <div class="text-gray-500 italic text-xs">None</div>
+              {% endif %}
+            </td>
+
+            <td class="px-3 py-2 space-y-0.5">
+              {% if entry.internalurl %}
+                {% set status_class = 'bg-gray-600' %}
+                {% set tooltip = entry.internalurl ~ ' — Not Monitored' %}
+                {% set display = 'NA' %}
+                {% if entry.internal_health_check_enabled %}
+                  {% if entry.internal_health_check_status == 'Error: SSLError' %}
+                    {% set status_class = 'bg-yellow-300 text-black' %}
+                    {% set tooltip = entry.internalurl ~ ' — SSL Error — updated ' ~ (entry.internal_health_check_update|time_since) %}
+                    {% set display = 'SSL' %}
+                  {% elif entry.internal_health_check_status and entry.internal_health_check_status.isdigit() and entry.internal_health_check_status|int < 400 %}
+                    {% set status_class = 'bg-green-600' %}
+                    {% set tooltip = entry.internalurl ~ ' — ' ~ entry.internal_health_check_status ~ ' — updated ' ~ (entry.internal_health_check_update|time_since) %}
+                    {% set display = entry.internal_health_check_status %}
+                  {% else %}
+                    {% set status_class = 'bg-red-600' %}
+                    {% set tooltip = entry.internalurl ~ ' — ' ~ (entry.internal_health_check_status or '?') ~ ' — updated ' ~ (entry.internal_health_check_update|time_since) %}
+                    {% set display = entry.internal_health_check_status or '?' %}
+                  {% endif %}
+                {% endif %}
+                <div>
+                  <span class="text-xs text-gray-400">INT:</span>
+                  <a href="{{ entry.internalurl }}" target="_blank" title="{{ tooltip }}">
+                    <span class="px-2 py-0.5 rounded text-xs font-medium {{ status_class }}">{{ display }}</span>
+                  </a>
+                </div>
+              {% endif %}
+
+              {% if entry.externalurl %}
+                {% set status_class = 'bg-gray-600' %}
+                {% set tooltip = entry.externalurl ~ ' — Not Monitored' %}
+                {% set display = 'NA' %}
+                {% if entry.external_health_check_enabled %}
+                  {% if entry.external_health_check_status == 'Error: SSLError' %}
+                    {% set status_class = 'bg-yellow-300 text-black' %}
+                    {% set tooltip = entry.externalurl ~ ' — SSL Error — updated ' ~ (entry.external_health_check_update|time_since) %}
+                    {% set display = 'SSL' %}
+                  {% elif entry.external_health_check_status and entry.external_health_check_status.isdigit() and entry.external_health_check_status|int < 400 %}
+                    {% set status_class = 'bg-green-600' %}
+                    {% set tooltip = entry.externalurl ~ ' — ' ~ entry.external_health_check_status ~ ' — updated ' ~ (entry.external_health_check_update|time_since) %}
+                    {% set display = entry.external_health_check_status %}
+                  {% else %}
+                    {% set status_class = 'bg-red-600' %}
+                    {% set tooltip = entry.externalurl ~ ' — ' ~ (entry.external_health_check_status or '?') ~ ' — updated ' ~ (entry.external_health_check_update|time_since) %}
+                    {% set display = entry.external_health_check_status or '?' %}
+                  {% endif %}
+                {% endif %}
+                <div>
+                  <span class="text-xs text-gray-400">EXT:</span>
+                  <a href="{{ entry.externalurl }}" target="_blank" title="{{ tooltip }}">
+                    <span class="px-2 py-0.5 rounded text-xs font-medium {{ status_class }}">{{ display }}</span>
+                  </a>
+                </div>
+              {% endif %}
+            </td>
+
+            
+
+            <td class="px-3 py-2">
+              {% if not entry.is_static %}
+                {% set tooltip = entry.last_api_update | time_since if entry.last_api_update else 'No update timestamp' %}
+                {% set timestamp = entry.last_api_update if entry.last_api_update else '' %}
+                
+                {% if not entry.last_api_update %}
+                  {% set status_class = 'bg-red-600' %}
+                {% elif entry.docker_status in ['start', 'running'] %}
+                  {% set status_class = 'bg-green-600' %}
+                {% elif entry.docker_status in ['die', 'exited'] %}
+                  {% set status_class = 'bg-red-600' %}
+                {% elif entry.docker_status %}
+                  {% set status_class = 'bg-yellow-400 text-black' %}
+                {% else %}
+                  {% set status_class = 'bg-gray-600' %}
+                {% endif %}
+
+                <span class="px-2 py-0.5 rounded text-xs font-medium {{ status_class }}" title="Updated {{ tooltip }} — {{ timestamp }}">
+                  {{ entry.docker_status or 'Unknown' }}
+                </span>
+
+                {% if entry.image_tag %}
+                  <div class="text-xs text-gray-400 mt-1">Tag: <code>{{ entry.image_tag }}</code></div>
+                {% endif %}
+              {% else %}
+                <span class="text-xs text-gray-400 italic">Static</span>
+              {% endif %}
+            </td>
+
+            {% if display_tools %}
+              <td class="px-3 py-2">
+                {% if STD_DOZZLE_URL and entry.container_id %}
+                  <a href="{{ STD_DOZZLE_URL }}/container/{{ entry.container_id[:12] }}" target="_blank">
+                    <img src="{{ url_for('static', filename='dozzle.svg') }}" alt="Dozzle" class="h-5" />
+                  </a>
+                {% endif %}
+              </td>
+            {% endif %}
+
+            <td class="px-3 py-2">
+              {% if not entry.is_static %}
+                <a href="{{ url_for('delete_entry', entry_id=entry.id) }}" class="text-red-500 hover:underline" onclick="return confirm('Are you sure you want to delete this entry?');">Delete</a>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+</div>
+{% endblock %} 

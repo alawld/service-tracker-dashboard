@@ -54,6 +54,14 @@ logger.addHandler(log_handler)
 logger.addHandler(console_handler)
 unauthorized_log_tracker = {}
 
+# === LaunchDarkly SDK Setup ===
+import ldclient
+from ldclient.config import Config
+
+LD_SDK_KEY = os.getenv("LAUNCHDARKLY_SDK_KEY", "your-sdk-key")
+ldclient.set_config(Config(LD_SDK_KEY))
+ld_client = ldclient.get()
+
 # Load settings before app config
 settings, config_from_env, config_from_file = load_settings()
 
@@ -620,7 +628,7 @@ def login():
         user = User.query.filter_by(username=username).first()
 
         if user and user.is_active and check_password_hash(user.password_hash, password):
-            login_user(user)  # <-- This is the key line you’re missing
+            login_user(user)  # <-- This is the key line you're missing
             session.permanent = True
             flash("Logged in successfully.", "success")
             return redirect(url_for("dashboard"))
@@ -633,7 +641,7 @@ def login():
 @login_required
 def logout():
     session.clear()
-    flash("You’ve been logged out.", "info")
+    flash("You've been logged out.", "info")
     return redirect(url_for("login"))
 
 
@@ -1752,6 +1760,19 @@ def create_default_admin():
             logger.info("🛠️ Default admin user created (username: admin, password: changeme123)")
         else:
             logger.info("👤 Admin user already exists.")
+
+@app.route('/dashboard_ld')
+@login_required
+def dashboard_ld():
+    from ldclient import Context
+    # Build a LaunchDarkly context for the current user
+    context = Context.builder(str(current_user.id)).name(current_user.username).build()
+    # Evaluate the flag for this user
+    show_new_ui = ld_client.variation("new-dashboard-ui", context, False)
+    if show_new_ui:
+        return render_template("dashboard_new.html")
+    else:
+        return render_template("dashboard.html")
 
 if __name__ == '__main__':
     create_default_admin()
