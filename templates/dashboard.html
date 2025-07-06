@@ -23,6 +23,26 @@
     font-size: 20px;
     color: #9e9e9e;
   }
+  
+  /* Flag switching animations */
+  #flag-banner {
+    animation: slideDown 0.3s ease-out;
+  }
+  
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .new-dashboard-active {
+    border-left: 4px solid #3b82f6;
+  }
 </style>
 {% endblock %}
 
@@ -272,6 +292,81 @@
 
 {% block extra_scripts %}
 <script>
+  // Real-time flag switching functionality
+  {% if enable_flag_listener %}
+  let flagCheckInterval;
+  let currentFlagValue = null;
+  
+  // Function to check flag status
+  async function checkFlagStatus() {
+    try {
+      const response = await fetch('/api/flag-status');
+      const data = await response.json();
+      
+      if (currentFlagValue === null) {
+        // Initial load
+        currentFlagValue = data.value;
+        if (data.value) {
+          showNewDashboard();
+        }
+      } else if (currentFlagValue !== data.value) {
+        // Flag value changed
+        currentFlagValue = data.value;
+        if (data.value) {
+          showNewDashboard();
+        } else {
+          showOldDashboard();
+        }
+      }
+    } catch (error) {
+      console.error('Error checking flag status:', error);
+    }
+  }
+  
+  // Function to show new dashboard
+  function showNewDashboard() {
+    const banner = document.createElement('div');
+    banner.className = 'bg-blue-700 text-white px-4 py-2 rounded mb-4 text-center text-xl font-bold';
+    banner.textContent = 'dashboard_new';
+    banner.id = 'flag-banner';
+    
+    const content = document.querySelector('.overflow-x-auto');
+    if (content && !document.getElementById('flag-banner')) {
+      content.parentNode.insertBefore(banner, content);
+    }
+    
+    // Add visual indicator
+    document.body.classList.add('new-dashboard-active');
+  }
+  
+  // Function to show old dashboard
+  function showOldDashboard() {
+    const banner = document.getElementById('flag-banner');
+    if (banner) {
+      banner.remove();
+    }
+    
+    // Remove visual indicator
+    document.body.classList.remove('new-dashboard-active');
+  }
+  
+  // Start flag monitoring
+  document.addEventListener('DOMContentLoaded', function() {
+    // Check immediately
+    checkFlagStatus();
+    
+    // Then check every 2 seconds
+    flagCheckInterval = setInterval(checkFlagStatus, 2000);
+  });
+  
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', function() {
+    if (flagCheckInterval) {
+      clearInterval(flagCheckInterval);
+    }
+  });
+  {% endif %}
+  
   let secondsSinceRefresh = 0;
   let refreshInterval = 60;
 

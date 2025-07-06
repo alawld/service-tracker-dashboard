@@ -62,6 +62,13 @@ LD_SDK_KEY = os.getenv("LAUNCHDARKLY_SDK_KEY", "your-sdk-key")
 ldclient.set_config(Config(LD_SDK_KEY))
 ld_client = ldclient.get()
 
+# Set up flag change listener
+def flag_change_listener(flag_key, old_value, new_value):
+    logger.info(f"🚩 Flag '{flag_key}' changed from {old_value} to {new_value}")
+
+# Subscribe to flag changes
+ld_client.flag_tracker.add_listener(flag_change_listener)
+
 # Load settings before app config
 settings, config_from_env, config_from_file = load_settings()
 
@@ -417,6 +424,7 @@ def dashboard():
         sort_in_group=sort_in_group,
         active_tab='dashboard',
         group_lookup=group_lookup,
+        enable_flag_listener=True,  # Enable real-time flag switching
     )
 
 
@@ -1872,6 +1880,25 @@ def dashboard_ld():
         active_tab='dashboard',
         group_lookup=group_lookup,
     )
+
+@app.route('/api/flag-status')
+@login_required
+def flag_status():
+    """API endpoint to get current flag status for the user"""
+    from ldclient import Context
+    
+    # Build context for current user
+    context = Context.builder(str(current_user.id)).name(current_user.username).build()
+    
+    # Get flag value
+    show_new_ui = ld_client.variation("new-dashboard-ui", context, False)
+    
+    return jsonify({
+        "flag_key": "new-dashboard-ui",
+        "value": show_new_ui,
+        "user_id": str(current_user.id),
+        "user_name": current_user.username
+    })
 
 if __name__ == '__main__':
     create_default_admin()
