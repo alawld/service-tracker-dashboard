@@ -303,18 +303,14 @@
       const response = await fetch('/api/flag-status');
       const data = await response.json();
       
-      console.log('Flag check:', data); // Debug log
-      
       if (currentFlagValue === null) {
         // Initial load
         currentFlagValue = data.value;
-        console.log('Initial flag value:', currentFlagValue); // Debug log
         if (data.value) {
           showNewDashboard();
         }
       } else if (currentFlagValue !== data.value) {
         // Flag value changed
-        console.log('Flag changed from', currentFlagValue, 'to', data.value); // Debug log
         currentFlagValue = data.value;
         if (data.value) {
           showNewDashboard();
@@ -329,7 +325,6 @@
   
   // Function to show new dashboard
   function showNewDashboard() {
-    console.log('Showing new dashboard'); // Debug log
     const banner = document.createElement('div');
     banner.className = 'bg-blue-700 text-white px-4 py-2 rounded mb-4 text-center text-xl font-bold';
     banner.textContent = 'dashboard_new';
@@ -338,9 +333,6 @@
     const content = document.querySelector('.overflow-x-auto');
     if (content && !document.getElementById('flag-banner')) {
       content.parentNode.insertBefore(banner, content);
-      console.log('Banner added to page'); // Debug log
-    } else {
-      console.log('Banner already exists or content not found'); // Debug log
     }
     
     // Add visual indicator
@@ -349,13 +341,9 @@
   
   // Function to show old dashboard
   function showOldDashboard() {
-    console.log('Showing old dashboard'); // Debug log
     const banner = document.getElementById('flag-banner');
     if (banner) {
       banner.remove();
-      console.log('Banner removed from page'); // Debug log
-    } else {
-      console.log('No banner found to remove'); // Debug log
     }
     
     // Remove visual indicator
@@ -364,30 +352,11 @@
   
   // Start flag monitoring
   document.addEventListener('DOMContentLoaded', function() {
-    console.log('Flag monitoring started'); // Debug log
-    
     // Check immediately
     checkFlagStatus();
     
     // Then check every 2 seconds
     flagCheckInterval = setInterval(checkFlagStatus, 2000);
-    
-    // Add manual test button for debugging
-    const testButton = document.createElement('button');
-    testButton.textContent = 'Test Flag Toggle';
-    testButton.className = 'bg-red-500 text-white px-2 py-1 rounded text-xs ml-2';
-    testButton.onclick = function() {
-      console.log('Manual test button clicked');
-      if (document.getElementById('flag-banner')) {
-        showOldDashboard();
-      } else {
-        showNewDashboard();
-      }
-    };
-    
-    // Add to the page header or navigation area
-    const header = document.querySelector('header') || document.querySelector('nav') || document.body;
-    header.appendChild(testButton);
   });
   
   // Cleanup on page unload
