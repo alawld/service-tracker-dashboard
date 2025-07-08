@@ -324,11 +324,12 @@ scheduler = BackgroundScheduler()
 @login_required
 def dashboard():
     from ldclient import Context
-    # Build a LaunchDarkly context for the current user with the real 'is_admin' attribute
+    # Build a LaunchDarkly context for the current user with the real 'is_admin' attribute and explicit kind
     context = (
         Context.builder(str(current_user.id))
+        .kind("user")
         .name(current_user.username)
-        .set("is_admin", current_user.is_admin)
+        .set("is_admin", bool(current_user.is_admin))
         .build()
     )
     # Evaluate the flag for this user
