@@ -323,15 +323,22 @@ scheduler = BackgroundScheduler()
 @app.route('/')
 @login_required
 def dashboard():
+    from ldclient import Context
+    # Build a LaunchDarkly context for the current user with the real 'is_admin' attribute
+    context = (
+        Context.builder(str(current_user.id))
+        .name(current_user.username)
+        .set("is_admin", current_user.is_admin)
+        .build()
+    )
+    # Evaluate the flag for this user
+    show_new_ui = ld_client.variation("new-dashboard-ui", context, False)
 
     sort = request.args.get('sort', 'group_name')
     direction = request.args.get('dir', 'asc')
     group_by = request.args.get('group_by', 'group_name')
     sort_in_group = request.args.get('sort_in_group', 'priority')  # default to priority
     msg = request.args.get('msg')
-
-    sort = request.args.get('sort', 'group_name')
-    direction = request.args.get('dir', 'asc')
 
     if sort == 'group_name':
         # Join to Group and sort by group.group_name
